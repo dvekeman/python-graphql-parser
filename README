@@ -1,0 +1,9 @@
+Draft work (experimental)
+
+Library: https://github.com/sighingnow/parsec.py
+
+GraphQL Specs: https://spec.graphql.org/June2018/#sec-Appendix-Grammar-Summary
+
+Examples
+https://github.com/sighingnow/parsec.py/blob/master/examples/sexpr.py
+https://github.com/sighingnow/parsec.py/blob/master/examples/jsonc.py
