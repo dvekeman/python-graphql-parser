@@ -1,9 +1,8 @@
 from __future__ import annotations
-from dataclasses import dataclass
-from enum import Enum
-from typing import List, Optional, Union, Any
 
 from parsec import *
+
+from grapql_parser import model
 
 whitespace = regex(r'\s*', re.MULTILINE)
 
@@ -93,57 +92,6 @@ def dict_object():
 value = number() | dict_object | array | true | false | null
 
 
-class OperationType(Enum):
-    QUERY = 'QUERY'
-    MUTATION = 'MUTATION'
-    SUBSCRIPTION = 'SUBSCRIPTION'
-
-
-@dataclass
-class Fragment:
-    pass
-
-
-@dataclass
-class NamedType:
-    type_name: str
-
-
-@dataclass
-class ListType:
-    type: Type
-
-
-@dataclass
-class NonNullType:
-    type: Union[NamedType, ListType]
-
-
-Type = Union[NamedType, ListType, NonNullType]
-
-
-@dataclass
-class Variable:
-    name: str
-    type: Union[NamedType, ListType, NonNullType]
-    default_value: Any
-
-
-@dataclass
-class Operation:
-    operation_type: OperationType
-    variables: Optional[List[Variable]] = None
-    directives: Optional[str] = None
-    selection_set: Optional[str] = None
-    name: Optional[str] = None
-
-
-@dataclass
-class GraphqlDocument:
-    fragments: List[Fragment]
-    operations: List[Operation]
-
-
 @generate('graphql mutation')
 def mutation():
     yield string('mutation')
@@ -154,8 +102,8 @@ def implicit_query():
     yield lbrace
     query_name = yield name
     yield rbrace
-    return Operation(
-        operation_type=OperationType.QUERY,
+    return model.Operation(
+        operation_type=model.OperationType.QUERY,
         name=query_name,
         variables=[]
     )
@@ -166,11 +114,11 @@ def named_type():
     variable_name_type = yield name
     non_nullable = yield optional(exclamation_mark)
 
-    named_type = NamedType(
+    named_type = model.NamedType(
         type_name=variable_name_type
     )
     if non_nullable:
-        return NonNullType(
+        return model.NonNullType(
             type=named_type
         )
     else:
@@ -183,11 +131,11 @@ def list_type():
     variable_list_type = yield type
     yield rbrack
     non_nullable = yield optional(exclamation_mark)
-    list_type = ListType(
+    list_type = model.ListType(
         type=variable_list_type
     )
     if non_nullable:
-        return NonNullType(
+        return model.NonNullType(
             type=list_type
         )
     else:
@@ -197,6 +145,7 @@ def list_type():
 type = named_type | list_type
 
 
+@generate
 def default_value():
     yield equal_sign
     default_value = yield value
@@ -210,7 +159,7 @@ def variable_definition():
     yield colon
     variable_type = yield type
     variable_default_value = yield optional(default_value)
-    return Variable(
+    return model.Variable(
         name=variable_name,
         type=variable_type,
         default_value=variable_default_value
@@ -233,8 +182,8 @@ def explicit_query():
     query_variable_definitions = yield optional(variable_definitions)
     yield lbrace
     # yield rbrace
-    return Operation(
-        operation_type=OperationType.QUERY,
+    return model.Operation(
+        operation_type=model.OperationType.QUERY,
         name=query_name,
         variables=query_variable_definitions
     )
@@ -243,29 +192,19 @@ def explicit_query():
 query = implicit_query | explicit_query
 
 
+@lexeme
+@generate
+def graphql_document():
+    operations = yield many(query | mutation)
+    return model.GraphqlDocument(
+        fragments=[],  # TODO
+        operations=operations
+    )
+
+
 def graphql_parser() -> Parser:
-    return whitespace >> (query | mutation)
+    return whitespace >> graphql_document
 
 
-if __name__ == '__main__':
-    result = graphql_parser().parse('''
-query myquery(
-  $participant:uuid!
-) {
-    ''')
-
-    #     result = graphql_parser().parse('''
-    # query myquery(
-    #   $participant:uuid!
-    # ) {
-    #   schema_name(
-    #     where:{
-    #       participant:{_eq:$participant}
-    #     }
-    #     limit:1
-    #   ){
-    #     invoice_number
-    #   }
-    # }
-    #     ''')
-    print(result)
+def run(input: str) -> model.GraphqlDocument:
+    return graphql_parser().parse(input)
